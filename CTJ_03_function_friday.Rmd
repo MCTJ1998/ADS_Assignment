@@ -1,0 +1,84 @@
+---
+title: "Function Friday #3"
+author: ""
+output: 
+  html_document:
+    toc: true
+    toc_float: true
+    df_print: paged
+    code_download: true
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE,
+                      message = FALSE,
+                      warning = FALSE,
+                      error = TRUE)
+```
+
+```{r}
+library(tidyverse)   #purrr is in here
+library(kableExtra)
+library(googlesheets4)
+library(lubridate)
+gs4_deauth()
+```
+
+
+## purrr
+
+Use the following data:
+
+```{r}
+mtcars
+```
+
+
+Question 1: Create two lists of random vectors of the same length and use map2 to get the power of the first list to the second list, by defining a function that is passed in as an argument in the mapping. 
+
+```{r}
+x <- list(10, 5, 10, 34, 35, 45, 50, 68, 80, 28)
+  
+y <- list(10, 2, 3, 5, 25, 10, 15, 66, 40, 80)
+
+#map2_dbl(x, y, ~.x^.y)
+Power <- function(x, y){
+  return(x**y)
+}
+map2(x,y, Power)
+```
+
+
+Question 2: In the mtcars dataset, are there any cars that have a quarter mile time(qsec) faster than 20 seconds? (Hint: you may need to flatten list(mtcars$qsec)). If so, create a list of those quarter mile times.
+
+```{r}
+Q_mile_times <- list(mtcars$qsec)
+Q_mile_times <- flatten_dbl(Q_mile_times)
+some(Q_mile_times, function(x) x>20)
+keep(Q_mile_times, function(x) x>20)
+```
+
+Question 3: Using the mtcars dataset, create a list of car names (Hint: use rownames() to pull the names since there is no variable for the names). Also create a list containing the transmission types for each car. For both lists you will need to flatten. From there, return the index of the first automatic car((0 = automatic, 1 = manual), and pluck that cars name from your list.
+
+```{r}
+names<- flatten_chr(list(rownames(mtcars)))
+transmission<-(list(mtcars$am))
+detect_index(flatten_dbl(transmission), function(x) x==0)
+pluck(names, detect_index(flatten_dbl(transmission), function(x) x==0))              
+```
+
+## kableExtra
+
+Make a table using the following data. Use at least one function from each section (Themes, Styles, Column / Row Specification, Grouped Columns / Rows, and HTML Only Features).
+
+```{r}
+mtcars %>% 
+  kbl() %>%
+  kable_material_dark() %>% 
+  kable_styling(bootstrap_options = c( "bordered", "hover", "condensed"),  full_width = F, html_font = "Times New Roman") %>% 
+  column_spec(2, background = "pink") %>% 
+  column_spec(8, background = spec_color(1:5, option = "C", direction = -1)) %>% 
+  scroll_box(width = "500px", height = "200px")
+```
+
+
