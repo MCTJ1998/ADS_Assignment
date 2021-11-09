@@ -1,0 +1,248 @@
+---
+title: "Function Friday problems #1"
+author: "NAME"
+date: "9/28/2021"
+output: 
+  html_document:
+    toc: TRUE
+    toc_float: TRUE
+    code_download: true
+---
+
+## tidytext
+
+```{r}
+library(gutenbergr)
+library(tidytext)
+library(janeaustenr)
+library(dplyr)
+library(stringr)
+library(ggplot2)
+```
+
+## 1. Pick a book of your choice 
+Use `gutenberg_works()` to filter out a book of your choice and replace 768 with `gutenberg_id` to download the text of the book. Below is an example. 
+
+```{r}
+books <- gutenberg_works() #assigning gutenberg_works to "books" so we can parse through the list of books
+Sherlock <- gutenberg_download(1661, mirror = "http://mirrors.xmission.com/gutenberg/") #downloading The Adventures of Sherlock Holmes, my book of choice
+```
+
+## 2. Use unnest_token to clean the data 
+Use unnest_token to split the line into words. 
+```{r}
+common_words_sh <- Sherlock %>%
+  unnest_tokens(word, text) %>% #using unnest_tokens to turn sentences from each book into a long list of words for analysis.
+  count(word, sort = TRUE) #counting the occurrence of each word and sorting them by how often they occur. 
+head(common_words_sh, 15)
+```
+
+
+### 3. Filter out the stop words
+Filter out the stop words from the previous step. 
+```{r}
+common_words_sh_sub <- Sherlock %>%
+  unnest_tokens(word, text) %>% #using unnest_tokens to turn sentences from each book into a long list of words for analysis
+  anti_join(stop_words, by = "word") %>% #using dplyr to get rid of stop words (explain dpyr)
+  count(word, sort = TRUE) #counting the occurrence of each word and sorting them by how often they occur.
+sh <- head(common_words_sh_sub, 15)
+sh
+```
+
+## 4. Most commonly used words
+Find out 15 most frequently used words in the book, after filtering out the stop words. 
+```{r fig.height=4}
+sh %>% #take our list of the top 15 most commonly used words
+  ggplot(aes(y = reorder(word,n), x = n)) +
+  labs(x = "Number of times used",
+       y = "Word",
+       title = "Most commonly used words in Sherlock Holmes",
+       subtitle = "It seems as though the words 'holmes,' 'time', and 'door' appear the most in the novel.") +
+  theme_minimal() +
+  geom_col() #create a bar graph
+```
+The get_sentiments is a function that allows us to get specific sentiment lexicons with appropriate categories for the words. The three general purpose lexicons are AFINN, bing, nrc: 
+
+  # AFINN - a lexicon measuring sentiment with a numeric score between -5 and +5
+  # Bing - A binary approach that divides words into either "positive" or "negative"
+  # NRC - categorizes words in a binary fashion ("yes"/"no") into categories of positive, negative, anger, anticipation, disgust, fear, joy, sadness, surprise, and trust. 
+
+
+## 5. Use get_sentiment to create a visualization of your choice
+Play with get_sentiment and create a visualization of your choice. Feel free to use your cleaned book from previous step. 
+
+
+```{r}
+original_books <- austen_books() %>%
+  group_by(book) %>%
+  mutate(line = row_number(),
+         chapter = cumsum(str_detect(text, regex("^chapter [\\divxlc]",
+                                                 ignore_case = TRUE)))) %>%
+  ungroup()
+original_books
+```
+
+```{r}
+tidy_books <- original_books %>%
+  unnest_tokens(word, text)
+# token = 'regex', pattern = "Chapter|CHAPTER [\\dIVXLC]"
+tidy_books
+```
+
+```{r}
+tidy_books %>% 
+  count(book, word, sort = TRUE) %>% 
+  anti_join(stop_words) %>% 
+  bind_tf_idf(word, book, n) %>%
+  arrange(desc(tf_idf))
+```
+
+
+```{r}
+positive <- get_sentiments("bing") %>% 
+  filter(sentiment == "positive") # This filters the entire dataset to look for unigrams (single words) that have positive connotations
+positive
+```
+
+```{r}
+cleaned_books <- tidy_books %>%
+  anti_join(stop_words %>% filter(lexicon == "SMART"),
+            by = 'word')
+cleaned_books
+```
+# Example
+```{r}
+cleaned_books %>% 
+  semi_join(positive, by = "word") %>%
+  count(word, sort = TRUE) %>%
+  slice(0:15) %>% 
+  ggplot(aes(x = n , y = reorder(word,n))) +
+  geom_col()
+```
+
+# My plot
+```{r fig.width=8}
+cleaned_books %>% 
+  semi_join(positive, by = "word") %>%
+  group_by(word == "positive") %>% 
+  ggplot(aes(x = book, fill= 'red') ) +
+  geom_bar()
+```
+
+# rayshader
+
+If you have trouble installing `rayshader` or get an error when you try to load it, you likely need to install [XQuarts](https://www.xquartz.org/)
+
+```{r}
+library(readxl)
+library(sp)
+library(png)
+library(grid)
+library(rayshader)
+library(rgl)
+```
+
+You will need too download the three datasets from the [GitHub repo](https://github.com/ducminhngo871/ExploringRayShader) (click on the dataset and then click View raw and it should automatically download). Make sure to save the data either to the project folder for this assignment (preferred) or to the same folder where you have saved this Rmd file.
+
+```{r}
+## Here is the 3 datasets
+district_name = read_excel('~/Desktop/Fall21/Advanced Data Science/ADS_Assignment/District Name.xlsx',1)
+population = read_excel('~/Desktop/Fall21/Advanced Data Science/ADS_Assignment/Population Data.xlsx',1)
+colnames(population) = c("Chi_name", "Population")
+hkmap = readRDS("~/Desktop/Fall21/Advanced Data Science/ADS_Assignment/HKG_adm1.rds")
+```
+
+```{r}
+# The preprocessing part
+map_data = data.frame(id=hkmap$ID_1, Code=hkmap$HASC_1, Eng_name=hkmap$NAME_1)
+map_data$Code = gsub('HK.', '', as.character(map_data$Code))
+map_data = merge(map_data, district_name, by = 'Eng_name')
+hkmapdf = fortify(hkmap)
+map_data = merge(hkmapdf, map_data, by="id")
+map_data = merge(map_data, population, by = "Chi_name")
+map_data$Population = as.numeric(map_data$Population)
+```
+
+
+```{r}
+# Here is the code to create a 2D map in Hongkong.
+# Map
+map_bg = ggplot(map_data, aes(long, lat, group=group, fill = Population)) +
+  geom_polygon() + # Shape
+  scale_fill_gradient(limits=range(map_data$Population), 
+                      low="#FFF3B0", high="#E09F3E") + # Population Density Color
+  layer(geom="path", stat="identity", position="identity", 
+       mapping=aes(x=long, y=lat, group=group, 
+                   color=I('#FFFFFF'))) # Boarder Color
+  
+map_bg = map_bg + theme(legend.position = "none", 
+                        axis.line=element_blank(), 
+                        axis.text.x=element_blank(), axis.title.x=element_blank(),
+                        axis.text.y=element_blank(), axis.title.y=element_blank(),
+                        axis.ticks=element_blank(), 
+                        panel.background = element_blank()) # Clean Everything
+map_bg
+```
+
+```{r}
+# Save as PNG
+xlim = ggplot_build(map_bg)$layout$panel_scales_x[[1]]$range$range
+ylim = ggplot_build(map_bg)$layout$panel_scales_y[[1]]$range$range
+ggsave('map_bg.png', width = diff(xlim)*40, height = diff(ylim)*40, units = "cm")
+```
+
+```{r}
+# Real Estate Dataset
+estate_df = readr::read_csv('https://raw.githubusercontent.com/cydalytics/HK_Properties_Price_Distribution/master/real_estate_master_df.csv')
+estate_df$apr_price = as.numeric(gsub('[^0-9]', '', estate_df$Price_Per_SqFeet_Apr2020))
+estate_df$mar_price = as.numeric(gsub('[^0-9]', '', estate_df$Price_Per_SqFeet_Mar2020))
+```
+
+```{r}
+# Read Background Image
+hk_map_bg = readPNG('map_bg.png')
+```
+
+Here is the 2D map that we need to turn into 3D. 
+
+```{r}
+# 2D Plot
+library(ggplot2)
+library(grid)
+estate_price = ggplot(estate_df) + 
+  annotation_custom(rasterGrob(hk_map_bg, width=unit(1,"npc"), height=unit(1,"npc")), 
+                    -Inf, Inf, -Inf, Inf) + # Background
+  xlim(xlim[1],xlim[2]) + # x-axis Mapping
+  ylim(ylim[1],ylim[2]) + # y-axis Mapping
+  geom_point(aes(x=Longitude, y=Latitude, color=apr_price), size=2) + # Points
+  scale_colour_gradient(name = 'Price per square foot (real)\n(HKD)', 
+                        limits=range(estate_df$apr_price), 
+                        low="#FCB9B2", high="#B23A48") + # Price Density Color
+  theme(axis.line=element_blank(), 
+        axis.text.x=element_blank(), axis.title.x=element_blank(),
+        axis.text.y=element_blank(), axis.title.y=element_blank(),
+        axis.ticks=element_blank(), 
+        panel.background = element_blank()) # Clean Everything
+estate_price
+ggsave('estate_price.png', width = diff(xlim)*40, height = diff(ylim)*40, units = "cm")
+```
+
+After seeing the graph, the two questions we have will be: 
+
+1) How is the population distribution in Hong Kong? Is the estate price higher in densely populated district?
+It seems that the in general the most populated areas are in the south of the main island, distributed along the cost, next to the Bay area. The prices seem to correlate with the population density. 
+
+2) How to transfer a 2D plot to a 3D plot? Do you think creating a 3D plot will be a good idea in here? Why is that? 
+
+Creating a 3D plot here would be a great idea to see distinguish each point. Especially if it is a 3D interactive plot. To do so, we might want to use a code such as the one bellow 
+
+plot_gg(estate_price, 
+        multicore = TRUE, 
+        width = diff(xlim),
+        height=diff(ylim), 
+        fov = , 
+        scale = )
+
+library(rgl)
+par3d(windowRect = c(0, 0, diff(xlim) * 2500, diff(ylim) * 2500))
+
